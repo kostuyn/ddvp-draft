@@ -1,3 +1,53 @@
+const http = require('http');
+const express = require('express');
+const bodyParser  = require('body-parser');
+
+const qs = require('querystring');
+
+const log = console;
+
+const app = express();
+const jsonParser = bodyParser.json()
+const urlencodedParser = bodyParser.urlencoded({ extended: false });
+
+app.use(jsonParser);
+app.use(urlencodedParser);
+
+app.use((req, res, next) => {
+	log.info(req.method, req.url, req.body, req.query);
+
+	res.send('ok');
+});
+
+app.listen(8080);
+
+// todo: use express for easy parsing ??
+// const server = http.createServer((req, res) => {
+// 	log.info(req.method, req.url, req.body);
+//
+// 	let body = '';
+// 	req.on('data', (data) => {
+// 		log.info(data.toString());
+// 		body += data;
+// 	});
+//
+// 	req.on('end', () => {
+// 		log.info('body:', qs.parse(body));
+// 	});
+//
+// 	res.setHeader('Content-Type', 'text/html');
+// 	res.setHeader('X-Foo', 'bar');
+// 	res.writeHead(200, {'Content-Type': 'text/plain'});
+// 	res.end('ok');
+// });
+//
+// server.on('clientError', (err, socket) => {
+// 	socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+// });
+//
+// server.listen(8080);
+
+
 class ProxyComponent {
 	constructor(proxy, output) {
 		this._proxy = proxy;
@@ -45,8 +95,6 @@ class MockComponent {
 }
 
 
-
-
 class HttpServer {
 	constructor(options) {
 
@@ -77,22 +125,4 @@ class HttpTransmitter {
 
 class HttpListener {
 
-}
-
-class CaptureComponent {
-	constructor(httpServer) {
-
-	}
-
-	async execute() {
-		const listener = new HttpListener();
-		this._httpServer.addListener(listener);
-
-		listener.on('data', async (data) => {
-			await this._repository.store(data);
-		});
-
-		await this._httpServer.run();
-
-	}
 }
