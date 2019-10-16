@@ -1,51 +1,91 @@
 const http = require('http');
 const express = require('express');
-const bodyParser  = require('body-parser');
+const bodyParser = require('body-parser');
+const request = require('request');
+const {PassThrough} = require('stream');
 
 const qs = require('querystring');
 
 const log = console;
 
 const app = express();
-const jsonParser = bodyParser.json()
-const urlencodedParser = bodyParser.urlencoded({ extended: false });
+const appDest = express();
 
-app.use(jsonParser);
-app.use(urlencodedParser);
+const jsonParser = bodyParser.json();
+const urlencodedParser = bodyParser.urlencoded({extended: false});
+
 
 app.use((req, res, next) => {
-	log.info(req.method, req.url, req.body, req.query);
+	const newReq = new PassThrough();
+	req.pipe(newReq);
 
-	res.send('ok');
+	// todo: http.request with url, headers, body-->pipe
+	const requestStream = newReq.pipe(request[req.method.toLowerCase()]('http://localhost:8081' + req.url));
+	const newRes = new PassThrough();
+
+
+	requestStream.pipe(res);
+	requestStream.pipe(newRes);
+
+	res.locals.newRes = newRes;
+	next();
 });
 
+app.use((req, res, next) => {
+	log.info('READ_REQUEST');
+
+	let body = '';
+	req.on('data', (data) => {
+		body += data;
+	});
+
+	req.on('end', () => {
+		log.info('PROXY request body:', qs.parse(body));
+	});
+
+	next();
+});
+
+app.use((req, res, next) => {
+	log.info('READ_RESPONSE');
+
+	let body = '';
+	const {newRes} = res.locals;
+
+	newRes.on('data', (data) => {
+		body += data;
+	});
+
+	newRes.on('end', () => {
+		log.info('PROXY response body:', qs.parse(body));
+	});
+
+	// next();
+});
+
+app.on('error', (err) => {
+	log.error('Proxy Error:', err);
+});
 app.listen(8080);
 
-// todo: use express for easy parsing ??
-// const server = http.createServer((req, res) => {
-// 	log.info(req.method, req.url, req.body);
-//
-// 	let body = '';
-// 	req.on('data', (data) => {
-// 		log.info(data.toString());
-// 		body += data;
-// 	});
-//
-// 	req.on('end', () => {
-// 		log.info('body:', qs.parse(body));
-// 	});
-//
-// 	res.setHeader('Content-Type', 'text/html');
-// 	res.setHeader('X-Foo', 'bar');
-// 	res.writeHead(200, {'Content-Type': 'text/plain'});
-// 	res.end('ok');
-// });
-//
-// server.on('clientError', (err, socket) => {
-// 	socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
-// });
-//
-// server.listen(8080);
+// DESTINATION SERVER
+
+appDest.use(jsonParser);
+appDest.use(urlencodedParser);
+
+appDest.use((req, res, next) => {
+	log.info('DESTINATION SERVER');
+	log.info(req.method, req.url, req.body, req.query, req.headers);
+
+	res.send('Hello from destination server!');
+});
+
+
+appDest.on('error', (err) => {
+	log.error('Destination Error:', err);
+});
+
+appDest.listen(8081);
 
 
 class ProxyComponent {
