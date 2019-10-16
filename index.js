@@ -16,55 +16,80 @@ const urlencodedParser = bodyParser.urlencoded({extended: false});
 
 
 app.use((req, res, next) => {
-	const newReq = new PassThrough();
-	req.pipe(newReq);
+    // todo: req.method.toLowerCase() - support all methods (HEAD, PATCH, etc.) ?
+    const requestToServer = request[req.method.toLowerCase()]('http://localhost:8081' + req.url);
+    const requestToPipe = new PassThrough();
+    requestToServer.pipe(requestToPipe);
 
-	// todo: http.request with url, headers, body-->pipe
-	const requestStream = newReq.pipe(request[req.method.toLowerCase()]('http://localhost:8081' + req.url));
-	const newRes = new PassThrough();
+    const requestStream = req.pipe(requestToPipe);
 
+    requestStream.pipe(res);
 
-	requestStream.pipe(res);
-	requestStream.pipe(newRes);
+    res.locals.requestToServer = requestToServer;
+    next();
+});
 
-	res.locals.newRes = newRes;
-	next();
+app.use(jsonParser);
+app.use(urlencodedParser);
+
+app.use((req, res, next) => {
+    log.info('PROXY_READ_REQUEST');
+
+    log.info('PROXY request:', req.method, req.url, req.body, req.query, req.headers);
+
+    next();
 });
 
 app.use((req, res, next) => {
-	log.info('READ_REQUEST');
+    log.info('PROXY_READ_RESPONSE');
 
-	let body = '';
-	req.on('data', (data) => {
-		body += data;
-	});
+    const {requestToServer} = res.locals;
+    requestToServer.on('response', (response) => {
+        log.info('response headers:', response.headers, response.statusCode);
+    });
 
-	req.on('end', () => {
-		log.info('PROXY request body:', qs.parse(body));
-	});
 
-	next();
+    let body = '';
+    requestToServer.on('data', (data) => {
+        body += data;
+    });
+
+    requestToServer.on('end', () => {
+        log.info('PROXY response body:', body);
+    });
+
+
+    // next();
 });
 
+
 app.use((req, res, next) => {
-	log.info('READ_RESPONSE');
+    log.info('READ_RESPONSE');
 
-	let body = '';
-	const {newRes} = res.locals;
+    let body = '';
+    const {newRes} = res.locals;
 
-	newRes.on('data', (data) => {
-		body += data;
-	});
+    newRes.on('readable', function () {
+        let data;
 
-	newRes.on('end', () => {
-		log.info('PROXY response body:', qs.parse(body));
-	});
+        while (data = this.read()) {
+            console.log(data.toString());
+        }
+    });
 
-	// next();
+    newRes.on('data', (data) => {
+        body += data;
+    });
+
+    newRes.on('end', () => {
+        log.info('PROXY response body:', body);
+    });
+
+    // next();
 });
 
 app.on('error', (err) => {
-	log.error('Proxy Error:', err);
+    log.error('Proxy Error:', err);
 });
 app.listen(8080);
 
@@ -74,93 +99,94 @@ appDest.use(jsonParser);
 appDest.use(urlencodedParser);
 
 appDest.use((req, res, next) => {
-	log.info('DESTINATION SERVER');
-	log.info(req.method, req.url, req.body, req.query, req.headers);
+    log.info('DESTINATION SERVER');
+    log.info(req.method, req.url, req.body, req.query, req.headers);
 
-	res.send('Hello from destination server!');
+    res.setHeader('x-my-header', 'My Header');
+    res.send({serverAnswer: 'Hello from destination server!'});
 });
 
 
 appDest.on('error', (err) => {
-	log.error('Destination Error:', err);
+    log.error('Destination Error:', err);
 });
 
 appDest.listen(8081);
 
 
 class ProxyComponent {
-	constructor(proxy, output) {
-		this._proxy = proxy;
-		this._output = output;
-	}
+    constructor(proxy, output) {
+        this._proxy = proxy;
+        this._output = output;
+    }
 
-	async execute(request) {
-		await this._output.sendRequest(request);
-		const response = await this._proxy.transmit(request);
-		await this._output.sendResponse(response);
-	}
+    async execute(request) {
+        await this._output.sendRequest(request);
+        const response = await this._proxy.transmit(request);
+        await this._output.sendResponse(response);
+    }
 }
 
 class CaptureComponent {
-	constructor(storage, proxy) {
-		this._storage = storage;
-		this._proxy = proxy;
-	}
+    constructor(storage, proxy) {
+        this._storage = storage;
+        this._proxy = proxy;
+    }
 
-	async execute(request) {
-		const response = await this._proxy.transmit(request);
-		await this._storage.saveRequest(request);
-		await this._storage.saveResponse(response);
-	}
+    async execute(request) {
+        const response = await this._proxy.transmit(request);
+        await this._storage.saveRequest(request);
+        await this._storage.saveResponse(response);
+    }
 }
 
 class MockComponent {
-	constructor(storage, proxy, transmitter) {
-		this._storage = storage;
-		this._proxy = proxy;
-		this._transmitter = transmitter;
-	}
+    constructor(storage, proxy, transmitter) {
+        this._storage = storage;
+        this._proxy = proxy;
+        this._transmitter = transmitter;
+    }
 
-	async execute(request) {
-		const requestRule = this._storage.getRequestRule();
-		const mockId = requestRule.check(request);
+    async execute(request) {
+        const requestRule = this._storage.getRequestRule();
+        const mockId = requestRule.check(request);
 
-		if (mockId) {
-			const response = await this._storage.getMock(mockId);
-			return this._transmitter.send(response);
-		}
+        if (mockId) {
+            const response = await this._storage.getMock(mockId);
+            return this._transmitter.send(response);
+        }
 
-		await this._proxy.transmit(request);
-	}
+        await this._proxy.transmit(request);
+    }
 }
 
 
 class HttpServer {
-	constructor(options) {
+    constructor(options) {
 
-	}
+    }
 
-	async run() {
+    async run() {
 
-	}
+    }
 
-	stop() {
+    stop() {
 
-	}
+    }
 
-	addListener(listener) {
+    addListener(listener) {
 
-	}
+    }
 }
 
 class HttpTransmitter {
-	constructor(url, method, headers) {
+    constructor(url, method, headers) {
 
-	}
+    }
 
-	send(data) {
+    send(data) {
 
-	}
+    }
 }
 
 class HttpListener {
