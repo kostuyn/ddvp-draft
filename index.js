@@ -1,7 +1,9 @@
 const http = require('http');
 const express = require('express');
 const bodyParser = require('body-parser');
+// const {request} = require('http');
 const request = require('request');
+
 const {PassThrough} = require('stream');
 
 const qs = require('querystring');
@@ -14,16 +16,67 @@ const appDest = express();
 const jsonParser = bodyParser.json();
 const urlencodedParser = bodyParser.urlencoded({extended: false});
 
+function parseRequest(req) {
+    log.info('PROXY request:', req.method, req.url, req.query, req.headers);
+
+    let body = '';
+    req.on('data', (data) => {
+        body += data;
+    });
+
+    req.on('end', () => {
+        log.info('PROXY response body:', body);
+    });
+}
+
+function parseResponse(requestToServer) {
+    requestToServer.on('response', (response) => {
+        log.info('PROXY response headers:', response.headers, response.statusCode);
+    });
+
+
+    let body = '';
+    requestToServer.on('data', (data) => {
+        body += data;
+    });
+
+    requestToServer.on('end', () => {
+        log.info('PROXY response body:', body);
+    });
+}
+
+
+const proxy = http.createServer((req, res)=>{
+    const requestToServer = request('http://localhost:8081' + req.url);
+    req.pipe(requestToServer)
+        .pipe(res);
+
+    parseRequest(req);
+    parseResponse(requestToServer);
+});
+
+
+// const proxy = http.createServer(app);
+
+app.disable('x-powered-by');
+app.disable('etag');
 
 app.use((req, res, next) => {
-    // todo: req.method.toLowerCase() - support all methods (HEAD, PATCH, etc.) ?
-    const requestToServer = request[req.method.toLowerCase()]('http://localhost:8081' + req.url);
-    const requestToPipe = new PassThrough();
-    requestToServer.pipe(requestToPipe);
+    const requestToServer = request('http://localhost:8081' + req.url);
+    req.pipe(requestToServer)
+        .pipe(res);
 
-    const requestStream = req.pipe(requestToPipe);
+    // const requestToServer = request({
+    //     method: req.method,
+    //     hostname: 'localhost',
+    //     port: 8081,
+    //     path: req.url,
+    //     headers: req.headers
+    // }, (serverResponse) => {
+    //     serverResponse.pipe(res);
+    // });
 
-    requestStream.pipe(res);
+    // req.pipe(requestToServer);
 
     res.locals.requestToServer = requestToServer;
     next();
@@ -45,7 +98,7 @@ app.use((req, res, next) => {
 
     const {requestToServer} = res.locals;
     requestToServer.on('response', (response) => {
-        log.info('response headers:', response.headers, response.statusCode);
+        log.info('PROXY response headers:', response.headers, response.statusCode);
     });
 
 
@@ -62,36 +115,15 @@ app.use((req, res, next) => {
     // next();
 });
 
-
-app.use((req, res, next) => {
-    log.info('READ_RESPONSE');
-
-    let body = '';
-    const {newRes} = res.locals;
-
-    newRes.on('readable', function () {
-        let data;
-
-        while (data = this.read()) {
-            console.log(data.toString());
-        }
-    });
-
-    newRes.on('data', (data) => {
-        body += data;
-    });
-
-    newRes.on('end', () => {
-        log.info('PROXY response body:', body);
-    });
-
-    // next();
+proxy.listen(8080);
+proxy.on('connect', (req, clientSocket, head) => {
+    log.info('######################################CONNECT:', head);
 });
 
-app.on('error', (err) => {
-    log.error('Proxy Error:', err);
+proxy.on('request', (req) => {
+
 });
-app.listen(8080);
+
 
 // DESTINATION SERVER
 
@@ -100,16 +132,15 @@ appDest.use(urlencodedParser);
 
 appDest.use((req, res, next) => {
     log.info('DESTINATION SERVER');
-    log.info(req.method, req.url, req.body, req.query, req.headers);
+    log.info('SERVER request:', req.method, req.url, req.body, req.query, req.headers);
 
     res.setHeader('x-my-header', 'My Header');
-    res.send({serverAnswer: 'Hello from destination server!'});
+    res.send({
+        serverAnswer: 'Hello from destination server!',
+        requestBody: req.body
+    });
 });
 
-
-appDest.on('error', (err) => {
-    log.error('Destination Error:', err);
-});
 
 appDest.listen(8081);
 
