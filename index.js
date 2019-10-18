@@ -10,118 +10,33 @@ const qs = require('querystring');
 
 const log = console;
 
-const app = express();
 const appDest = express();
 
 const jsonParser = bodyParser.json();
 const urlencodedParser = bodyParser.urlencoded({extended: false});
 
-function parseRequest(req) {
-    log.info('PROXY request:', req.method, req.url, req.query, req.headers);
 
-    let body = '';
-    req.on('data', (data) => {
-        body += data;
-    });
+const Proxy = require('./proxy');
+const StreamReader = require('./stream_reader');
 
-    req.on('end', () => {
-        log.info('PROXY response body:', body);
-    });
-}
+const SCHEMA = 'http';
+const HOST = 'localhost';
+const PORT = 8081;
 
-function parseResponse(requestToServer) {
-    requestToServer.on('response', (response) => {
-        log.info('PROXY response headers:', response.headers, response.statusCode);
-    });
+const server = http.createServer(async (req, res) => {
+    const proxy = new Proxy(SCHEMA, HOST, PORT, log);
+    const consoleOutput = new ConsoleOutput(log);
+    const httpParser = new HttpParser(log);
+    const proxyComponent = new ProxyComponent(proxy, consoleOutput, httpParser, log);
 
 
-    let body = '';
-    requestToServer.on('data', (data) => {
-        body += data;
-    });
-
-    requestToServer.on('end', () => {
-        log.info('PROXY response body:', body);
-    });
-}
-
-
-const proxy = http.createServer((req, res)=>{
-    const requestToServer = request('http://localhost:8081' + req.url);
-    req.pipe(requestToServer)
-        .pipe(res);
-
-    parseRequest(req);
-    parseResponse(requestToServer);
+    await proxyComponent.execute(req, res);
 });
 
+server.listen(8080);
 
-// const proxy = http.createServer(app);
-
-app.disable('x-powered-by');
-app.disable('etag');
-
-app.use((req, res, next) => {
-    const requestToServer = request('http://localhost:8081' + req.url);
-    req.pipe(requestToServer)
-        .pipe(res);
-
-    // const requestToServer = request({
-    //     method: req.method,
-    //     hostname: 'localhost',
-    //     port: 8081,
-    //     path: req.url,
-    //     headers: req.headers
-    // }, (serverResponse) => {
-    //     serverResponse.pipe(res);
-    // });
-
-    // req.pipe(requestToServer);
-
-    res.locals.requestToServer = requestToServer;
-    next();
-});
-
-app.use(jsonParser);
-app.use(urlencodedParser);
-
-app.use((req, res, next) => {
-    log.info('PROXY_READ_REQUEST');
-
-    log.info('PROXY request:', req.method, req.url, req.body, req.query, req.headers);
-
-    next();
-});
-
-app.use((req, res, next) => {
-    log.info('PROXY_READ_RESPONSE');
-
-    const {requestToServer} = res.locals;
-    requestToServer.on('response', (response) => {
-        log.info('PROXY response headers:', response.headers, response.statusCode);
-    });
-
-
-    let body = '';
-    requestToServer.on('data', (data) => {
-        body += data;
-    });
-
-    requestToServer.on('end', () => {
-        log.info('PROXY response body:', body);
-    });
-
-
-    // next();
-});
-
-proxy.listen(8080);
-proxy.on('connect', (req, clientSocket, head) => {
-    log.info('######################################CONNECT:', head);
-});
-
-proxy.on('request', (req) => {
-
+server.on('error', (err) => {
+    log.error(err);
 });
 
 
@@ -146,15 +61,134 @@ appDest.listen(8081);
 
 
 class ProxyComponent {
-    constructor(proxy, output) {
+    constructor(proxy, output, httpParser, log) {
         this._proxy = proxy;
         this._output = output;
+        this._httpParser = httpParser;
+
+        this._log = log;
     }
 
-    async execute(request) {
-        await this._output.sendRequest(request);
-        const response = await this._proxy.transmit(request);
+    async execute(req, outputRes) {
+        const requestToServer = IncomingRequest.create(req);
+        const requestToParsing = IncomingRequest.create(req);
+
+        // const httpRequest = await this._httpParser.parseRequest(requestToParsing);
+        await this._output.sendRequest(requestToParsing);
+
+        const response = await this._proxy.transmit(requestToServer, outputRes);
+        // const httpResponse = await this._httpParser.parseResponse(response);
+
         await this._output.sendResponse(response);
+    }
+}
+
+class IncomingRequest {
+    constructor(req) {
+        this._req = req;
+    }
+
+    get method() {
+        return this._req.method;
+    }
+
+    get headers() {
+        return this._req.headers;
+    }
+
+    get path() {
+        return this._req.url;
+    }
+
+    get requestStream() {
+        return this._req;
+    }
+
+    async getBody() {
+        return StreamReader.read(this._req);
+    }
+
+    toJSON() {
+        return {
+            method: this.method,
+            headers: this.headers,
+            path: this.path
+        };
+    }
+
+    static create(req) {
+        const copyReq = req.pipe(new PassThrough());
+        copyReq.headers = req.headers;
+        copyReq.method = req.method;
+        copyReq.url = req.url;
+
+        return new IncomingRequest(copyReq);
+    }
+}
+
+class ConsoleOutput {
+    constructor(log) {
+        this._log = log;
+    }
+
+    async sendRequest(incomingRequest) {
+        const body = await incomingRequest.getBody();
+
+        this._log.info('httpRequest:', {
+            ...incomingRequest.toJSON(),
+            body
+        });
+    }
+
+    async sendResponse(response) {
+        const body = await response.getBody();
+
+        this._log.info('httpResponse:', {
+            ...response.toJSON(),
+            body
+        });
+    }
+}
+
+class HttpParser {
+    constructor(log) {
+        this._log = log;
+    }
+
+    async parseRequest(incomingReq) {
+        const body = await this._readStream(incomingReq.requestStream);
+
+        return {
+            method: incomingReq.method,
+            path: incomingReq.path,
+            headers: incomingReq.headers,
+            body
+        };
+    }
+
+    async parseResponse(serverResponse) {
+        const body = await this._readStream(serverResponse.responseStream);
+
+        return {
+            statusCode: serverResponse.statusCode,
+            headers: serverResponse.headers,
+            body
+        };
+    }
+
+    async _readStream(stream) {
+        return new Promise((resolve, reject) => {
+            let body = '';
+            stream.on('data', (data) => {
+                body += data;
+            });
+
+            stream.on('end', () => {
+                resolve(body);
+            });
+
+            stream.on('error', reject);
+        });
     }
 }
 
