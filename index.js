@@ -1,35 +1,59 @@
-const http = require('http');
-const log = console;
-
-const Proxy = require('./proxy_server/proxy/proxy');
-const HttpRequest = require('./proxy_server/proxy/http_request');
-const ProxyComponent = require('./proxy_server/componet/proxy_component');
-const ConsoleOutput = require('./proxy_server/output/console_output');
-
-const ProxyServerFactory = require('./proxy_server');
-
-const HOST = 'localhost';
-const PORT = 8080;
-
-// todo: inside admin API
-
-const httpServerFactory = new ProxyServerFactory({
-    host: HOST,
-    port: PORT
-}, log);
-
-const server = httpServerFactory.createHttp();
-
-(async () => await server.run())();
-
-// DESTINATION SERVER
-
 const express = require('express');
 const bodyParser = require('body-parser');
+const {ValidationError} = require('@hapi/joi/lib/errors');
+const {ApplicationError} = require('./common/app/errors');
 
-const appDest = express();
+const {
+    statusCodes,
+    httpMessages
+} = require('./common/controller/http_status');
+
+const ADMIN_PORT = 7000;
+
 const jsonParser = bodyParser.json();
 const urlencodedParser = bodyParser.urlencoded({extended: false});
+
+const log = console;
+const app = express();
+
+app.disable('x-powered-by');
+app.disable('etag');
+
+app.use(jsonParser);
+app.use(urlencodedParser);
+
+app.use((req, res, next) => {
+    res.locals.log = log;
+    log.info('INCOMING_REQUEST', req.method, req.path);
+
+    next();
+});
+
+app.use('/admin', require('./admin/controller'));
+
+app.use((req, res) => {
+    res.status(statusCodes.HTTP_NOT_FOUND).send(httpMessages.NOT_FOUND);
+});
+
+app.use((err, req, res, next) => {
+    res.locals.log.error(err);
+
+    if (err instanceof ValidationError) {
+        return res.status(statusCodes.HTTP_BAD_REQUEST).send(httpMessages.BAD_REQUEST);
+    }
+
+    if (err instanceof ApplicationError) {
+        return res.status(statusCodes.HTTP_UNPROCESSABLE_ENTITY).send(err.message);
+    }
+
+    return res.status(statusCodes.HTTP_SERVER_ERROR).send(httpMessages.SERVER_ERROR);
+});
+
+app.listen(ADMIN_PORT);
+
+
+// DESTINATION SERVER FOR TESTING
+const appDest = express();
 
 appDest.use(jsonParser);
 appDest.use(urlencodedParser);

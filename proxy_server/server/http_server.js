@@ -1,22 +1,20 @@
 const http = require('http');
 
-const DEFAULT_HOST = 'localhost';
-
 class HttpServer {
-    constructor(options, listener, log) {
-        this._options = options;
-        this._listener = listener;
+    constructor(port, host, httpListener, log) {
+        this._port = port;
+        this._host = host;
+        this._httpListener = httpListener;
 
         this._log = log;
     }
 
     async run() {
         return new Promise((resolve, reject) => {
-            const host = this._options.host || DEFAULT_HOST;
 
-            this._server = http.createServer(this._listener.listen.bind(this._listener));
+            this._server = http.createServer(this._httpListener.listen.bind(this._httpListener));
 
-            this._server.listen(this._options.port, host);
+            this._server.listen(this._port, this._host);
             this._server.on('listening', resolve);
 
             this._server.on('error', (err) => {
@@ -30,11 +28,11 @@ class HttpServer {
         return new Promise((resolve, reject) => {
             this._server.close((err) => {
                 if (err) {
-                    return resolve();
+                    this._log.error(err);
+                    reject(new Error('Can not close http server'));
                 }
 
-                this._log.error(err);
-                reject(err);
+                return resolve();
             });
         });
     }

@@ -2,8 +2,8 @@ const Proxy = require('../proxy/proxy');
 const HttpRequest = require('../proxy/http_request');
 
 class HttpListener {
-    constructor(storage, outputFactory, componentFactory, log) {
-        this._storage = storage;
+    constructor(httpStorage, outputFactory, componentFactory, log) {
+        this._httpStorage = httpStorage;
         this._outputFactory = outputFactory;
         this._componentFactory = componentFactory;
 
@@ -11,7 +11,7 @@ class HttpListener {
     }
 
     async listen(req, res) {
-        const options = await this._storage.getHttpOptions();
+        const options = await this._httpStorage.getHttpOptions();
 
         const {
             protocol,

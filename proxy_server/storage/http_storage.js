@@ -1,8 +1,9 @@
-class Storage {
+class HttpStorage {
     constructor(log) {
         this._log = log;
     }
 
+    // todo: use real BD
     async getHttpOptions() {
         return {
             protocol: 'http:',
@@ -14,4 +15,4 @@ class Storage {
     }
 }
 
-module.exports = Storage;
+module.exports = HttpStorage;
