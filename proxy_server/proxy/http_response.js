@@ -1,32 +1,32 @@
 class HttpResponse {
-	constructor(responseStream, statusCode, headers, body) {
-		this._responseStream = responseStream;
-		this._statusCode = statusCode;
-		this._headers = headers;
-		this._body = body;
+    constructor(statusCode, headers, body) {
+        this._statusCode = statusCode;
+        this._headers = headers;
+        this._body = body;
 
-		this._snapshot = {statusCode, headers, body};
-	}
+        this._snapshot = {statusCode, headers, body};
+    }
 
-	get stream(){
-		return this._responseStream;
-	}
+    get statusCode() {
+        return this._statusCode;
+    }
 
-	get statusCode() {
-		return this._statusCode;
-	}
+    get headers() {
+        return this._headers;
+    }
 
-	get headers() {
-		return this._headers;
-	}
+    get body() {
+        return this._body;
+    }
 
-	get body() {
-		return this._body;
-	}
+    toJSON() {
+        return this._snapshot;
+    }
 
-	toJSON() {
-		return this._snapshot;
-	}
+    send(outRes) {
+        outRes.writeHead(this._statusCode, this._headers);
+        outRes.end(this._body);
+    }
 }
 
 module.exports = HttpResponse;

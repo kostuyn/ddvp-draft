@@ -26,6 +26,7 @@ class HttpListener {
         const component = this._componentFactory.create(mode, proxy, output);
 
         try {
+            // todo: pass - protocol, host, port
             const httpRequest = await HttpRequest.createAsync(req);
             await component.execute(httpRequest, res);
 

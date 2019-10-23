@@ -8,7 +8,8 @@ class StreamReader {
 			});
 
 			stream.on('end', () => {
-				resolve(buffer);
+				const bufferStr = buffer.toString();
+				resolve(bufferStr || null);
 			});
 
 			stream.on('error', reject);

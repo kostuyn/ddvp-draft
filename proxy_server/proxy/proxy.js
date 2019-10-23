@@ -9,9 +9,12 @@ class Proxy {
 
     async transmit(httpRequest, outRes) {
         const httpResponse = await httpRequest.send(this._protocol, this._host, this._port);
-        httpResponse.stream.pipe(outRes);
+        httpResponse.send(outRes);
 
-        return httpResponse
+        // outRes.writeHead(httpResponse.statusCode, httpResponse.headers);
+        // outRes.end(httpResponse.body);
+
+        return httpResponse;
     }
 
     async sendResponse(httpResponse, outRes) {

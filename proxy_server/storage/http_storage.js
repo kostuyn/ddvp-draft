@@ -6,7 +6,7 @@ class HttpStorage {
     // todo: use real BD
     async getHttpOptions() {
         return {
-            protocol: 'http:',
+            protocol: 'http',
             host: 'localhost',
             port: 8081,
             mode: 'proxy',
