@@ -1,54 +1,25 @@
-const {PassThrough} = require('stream');
-
 const HttpClient = require('./http_client');
 const StreamReader = require('./stream_reader');
 const HttpResponse = require('./http_response');
 
 class HttpRequest {
-    constructor(httpClient, method, headers, path, body) {
-        this._httpClient = httpClient;
-        this._method = method;
-        this._headers = headers;
-        this._path = path;
-        this._body = body;
+    constructor(serverSettings, requestOptions) {
+        this._serverSettings = serverSettings;
+        this._requestOptions = requestOptions;
 
-        this._snapshot = {method, headers, path, body};
+        this._snapshot = {serverSettings, requestOptions};
     }
 
-    get method() {
-        return this._method;
-    }
-
-    get headers() {
-        return this._headers;
-    }
-
-    get path() {
-        return this._path;
-    }
-
-    get body() {
-        return this._body;
-    }
-
-    async send(protocol, host, port) {
-        const options = {
-            host,
-            port,
-            protocol: `${protocol}:`,
-            method: this._method,
-            headers: this._headers,
-            path: this._path
-        };
-
-        const response = await this._httpClient.sendRequest(options, this._body);
+    async sendAsync() {
+        const httpClient = HttpClient.create(this._serverSettings, this._requestOptions);
+        const serverResponse = await httpClient.sendRequest();
 
         const {
             statusCode,
             headers
-        } = response;
+        } = serverResponse;
 
-        const responseBody = await StreamReader.read(response);
+        const responseBody = await StreamReader.read(serverResponse);
 
         return new HttpResponse(statusCode, headers, responseBody);
     }
@@ -57,16 +28,8 @@ class HttpRequest {
         return this._snapshot;
     }
 
-    static async createAsync(req) {
-        const {
-            method,
-            headers,
-            url
-        } = req;
-
-        const httpClient = new HttpClient();
-        const body = await StreamReader.read(req);
-        return new HttpRequest(httpClient, method, headers, url, body);
+    static create(serverSettings, requestOptions) {
+        return new HttpRequest(serverSettings, requestOptions);
     }
 }
 

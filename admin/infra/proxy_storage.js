@@ -1,4 +1,4 @@
-class HttpServerStorage {
+class proxyStorage {
     constructor(log) {
         this._log = log;
     }
@@ -18,12 +18,27 @@ class HttpServerStorage {
         delete localStorage[key];
     }
 
+    // todo: use real DB
+    async getSettings(port, host) {
+        const key = this._getKey(port, host);
+        const server = localStorage[key];
+
+        if (!server) {
+            throw new Error('Server not found');
+        }
+
+        return {
+            outputs: ['console'],
+            mode: 'proxy'
+        };
+    }
+
     _getKey(port, host) {
         return [host, port].join(':');
     }
 }
 
-module.exports = HttpServerStorage;
+module.exports = proxyStorage;
 
 /**
  * Local singleton hash map storage

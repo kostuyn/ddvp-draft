@@ -1,32 +1,31 @@
 const COMPONENT_NAME = 'mock';
 
 class MockComponent {
-    constructor(proxy, output, storage) {
-        this._proxy = proxy;
-        this._output = output;
+    constructor(httpRequest, serverResponse, proxyComponent, storage, log) {
+        this._httpRequest = httpRequest;
+        this._serverResponse = serverResponse;
+        this._proxyComponent = proxyComponent;
         this._storage = storage;
+
+        this._log = log;
     }
 
     static get name() {
         return COMPONENT_NAME;
     }
 
-    async execute(httpRequest, outputRes) {
-        await this._output.sendRequest(httpRequest);
-
+    async execute() {
         const requestRule = await this._storage.getRequestRule();
-        const mockId = requestRule.check(httpRequest);
+        const mockId = requestRule.check(this._httpRequest);
 
         if (mockId) {
             const httpResponse = await this._storage.getMock(mockId);
-            await this._proxy.sendResponse(httpResponse, outputRes);
-            await this._output.sendResponse(httpResponse);
+            await httpResponse.sendAsync(this._serverResponse);
 
-            return;
+            return httpResponse;
         }
 
-        const httpResponse = await this._proxy.transmit(httpRequest, outputRes);
-        await this._output.sendResponse(httpResponse);
+        return this._proxyComponent.execute();
     }
 }
 

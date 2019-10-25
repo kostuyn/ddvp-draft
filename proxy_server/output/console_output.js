@@ -12,11 +12,11 @@ class ConsoleOutput extends OutputBase {
     }
 
     async _sendRequest(httpRequest) {
-        this._log.info('httpRequest:', httpRequest.toJSON());
+        this._log.info('httpRequest:', JSON.stringify(httpRequest));
     }
 
     async _sendResponse(httpResponse) {
-        this._log.info('httpResponse:', httpResponse.toJSON());
+        this._log.info('httpResponse:', JSON.stringify(httpResponse));
     }
 }
 

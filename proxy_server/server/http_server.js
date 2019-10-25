@@ -11,7 +11,7 @@ class HttpServer {
 
     async run() {
         return new Promise((resolve, reject) => {
-            this._server = http.createServer(this._httpListener.listen.bind(this._httpListener));
+            this._server = http.createServer((req, res) => this._httpListener.listen(req, res, this._port, this._host));
 
             this._server.listen(this._port, this._host);
             this._server.on('listening', resolve);

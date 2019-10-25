@@ -23,9 +23,9 @@ class HttpResponse {
         return this._snapshot;
     }
 
-    send(outRes) {
-        outRes.writeHead(this._statusCode, this._headers);
-        outRes.end(this._body);
+    sendAsync(serverResponse) {
+        serverResponse.writeHead(this._statusCode, this._headers);
+        serverResponse.end(this._body);
     }
 }
 
