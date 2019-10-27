@@ -10,14 +10,11 @@ const ServerSettings = require('../server_settings');
 
 const StreamReader = require('../stream_reader');
 
-describe('HttpRequest tests', () => {
+describe('HttpRequest test', () => {
     it('send request', async () => {
         // Arrange
         const responseHeaders = {'response-header': 'my header'};
         const responseBody = {hello: 'world'};
-
-        const options = {};
-        const settings = {};
 
         const httpClient = sinon.createStubInstance(HttpClient);
         const serverResponse = sinon.createStubInstance(ServerResponse);
@@ -34,8 +31,6 @@ describe('HttpRequest tests', () => {
         serverResponse.headers = responseHeaders;
 
         httpClient.sendRequest.resolves(serverResponse);
-        requestOptions.create.returns(options);
-        serverSettings.create.returns(settings);
 
         const httpRequest = HttpRequest.create(serverSettings, requestOptions);
 
